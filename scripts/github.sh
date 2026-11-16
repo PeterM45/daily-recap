@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Usage: github.sh [DATE]
-# Tallies every commit authored that day across all branches of all repos in $ORG,
+# Usage: github.sh [RANGE]  (see day-bounds.sh)
+# Tallies every commit authored in the range across all branches of all repos in $ORG,
 # deduped by SHA. Prints per-person totals, then per-person-per-repo counts.
 set -euo pipefail
 DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -8,7 +8,7 @@ source "$DIR/day-bounds.sh" "${1:-}"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
-# A repo pushed before the day started cannot hold commits pushed during it.
+# A repo pushed before the range started cannot hold commits pushed during it.
 gh api "orgs/$ORG/repos" --paginate \
   -q ".[] | select(.pushed_at >= \"$SINCE\") | .name" >"$TMP/repos"
 
@@ -33,7 +33,7 @@ while IFS=$'\t' read -r repo sha; do
     }'
 done <"$TMP/shas" >"$TMP/commits.jsonl"
 
-echo "GitHub $ORG, $DAY ($TIMEZONE, $SINCE to $UNTIL)"
+echo "GitHub $ORG, $LABEL ($TIMEZONE, $SINCE to $UNTIL)"
 echo "Repos pushed: $(wc -l <"$TMP/repos")  Unique commits: $(wc -l <"$TMP/commits.jsonl")"
 echo
 

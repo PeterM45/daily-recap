@@ -21,11 +21,12 @@ done <"$TMP/repos" | sort -u >"$TMP/shas"
 
 # Merge commits count separately and carry no line stats: GitHub diffs them
 # against the first parent, which would double-count the merged work.
-# Lockfiles and generated files stay out of line counts; one Drizzle snapshot is ~6k lines.
+# Bot commits are left out. Lockfiles and generated files stay out of line counts; one Drizzle snapshot is ~6k lines.
 GENERATED='(^|/)(pnpm-lock\.yaml|package-lock\.json|yarn\.lock|bun\.lockb?|[^/]*\.snap|routeTree\.gen\.ts)$|(^|/)(drizzle/meta|convex/_generated)/'
 while IFS=$'\t' read -r repo sha; do
   gh api "repos/$ORG/$repo/commits/$sha" | jq -c --arg repo "$repo" --arg gen "$GENERATED" '
-    (.files // [] | map(select(.filename | test($gen) | not))) as $f | {
+    select(.author.type != "Bot")
+    | (.files // [] | map(select(.filename | test($gen) | not))) as $f | {
       repo: $repo,
       who: (.author.login // .commit.author.email),
       merge: ((.parents | length) > 1),

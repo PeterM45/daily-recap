@@ -26,6 +26,7 @@ The range is the argument, default today: one day (`2026-11-13`, `yesterday`, `l
    - one summary table, a row per person from any output: commits, lines added and deleted, PRs opened, PRs merged, reviews given, PR comments, tickets created, ticket comments, tickets moved, tickets completed
    - per person beneath it: commits per repo, reviews by verdict, moves by target state, completed tickets as ID and title (for a range longer than a day, list them only for people with ten or fewer, otherwise give the count)
    - a PR reviews section from the `prs.sh` table: per PR, author and reviewers, review rounds, and the range's reviewer comments against the author's replies and fix commits. Tickets sitting In Review behind one of these PRs are being worked, not stalled
+   - a cycle time section from the `prs.sh` table, next to the LinearB elite bands its header gives. Name how many of the merged PRs were reviewed: an unreviewed PR has no pickup or review stage, so a fast cycle time with few reviews means the review step is skipped, not quick. Treat a percentile over fewer than five PRs as an anecdote
    - one closing line: line counts leave out lockfiles and generated files; bot accounts are left out; ticket moves go to the person who made them, or, when an integration made them or the data came through the MCP, to the assignee (the creator when unassigned)
 
    Done when every number traces to a line of script output and every person in any output has a row.

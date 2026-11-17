@@ -7,6 +7,7 @@ Type `/daily-recap` (or `/daily-recap yesterday`, `/daily-recap "last week"`) an
 - one table with a row per person: commits, lines added and deleted, PRs opened and merged, reviews given, PR comments, Linear tickets created, commented on, moved and completed
 - per person: commits by repo, reviews by verdict, ticket moves by target state, completed tickets
 - a PR reviews section: each PR under review in the range, its review rounds, and the reviewer's comments next to the author's replies and fix commits
+- cycle time for merged PRs, split into coding (first commit to PR opened), pickup (opened to first review) and review (first review to merge), at the median and p75, next to [LinearB's 2026 benchmark](https://linearb.io/engineering-benchmarks/) elite bands
 
 Shell scripts do all the counting, so the numbers don't depend on the model doing arithmetic. Claude runs the scripts and writes up the report.
 

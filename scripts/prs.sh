@@ -3,8 +3,8 @@
 # Tallies the range's pull request activity across $ORG: PRs opened and merged
 # (credited to the PR author), reviews submitted on someone else's PR, and comments
 # (inline review comments plus conversation comments). Then lists every PR that got
-# review activity in the range, with its review rounds and the author's response.
-# Bot accounts are left out.
+# review activity in the range, with its review rounds and the author's response, and
+# cycle time for PRs merged in the range. Bot accounts are left out.
 set -euo pipefail
 DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$DIR/day-bounds.sh" "${1:-}"
@@ -17,8 +17,9 @@ OFFSET=$(( ${Z:0:1}1 * (10#${Z:1:2} * 3600 + 10#${Z:3:2} * 60) ))
 gh api -X GET search/issues --paginate -f q="org:$ORG is:pr updated:>=$SINCE" -f per_page=100 \
   -q '.items[] | "\(.repository_url | split("/") | last)\t\(.number)"' >"$TMP/prs"
 
-# events.jsonl: one {type, who, at} per action. reviewed.jsonl: one row per PR that
-# got a review or comment from someone other than its author in the range.
+# all.jsonl holds three kinds of row: "event", one {type, who, at} per action;
+# "reviewed", one per PR that got a review or comment from someone other than its
+# author in the range; "cycle", one per PR merged in the range, with its timestamps.
 while IFS=$'\t' read -r repo n; do
   base="repos/$ORG/$repo"
   gh api "$base/pulls/$n" >"$TMP/pr.json"
@@ -51,6 +52,14 @@ while IFS=$'\t' read -r repo n; do
         author_replies: ([$cm[] | select((.created_at | in_range) and .user.login == $author)] | length),
         author_commits: ([$commits[0][] | select(.author.login == $author and (.commit.author.date | in_range))] | length),
         state: (if $p.merged_at then "merged" else $p.state end)
+      }),
+      (select(($p.merged_at | in_range) and $p.user.type != "Bot") | {
+        kind: "cycle",
+        who: $author,
+        first_commit: ([$commits[0][].commit.author.date] | min),
+        opened: $p.created_at,
+        first_review: ([$rv[].submitted_at] + [$cm[] | select(.user.login != $author) | .created_at] | min),
+        merged: $p.merged_at
       })'
 done <"$TMP/prs" >"$TMP/all.jsonl"
 
@@ -75,4 +84,25 @@ jq -sr --rawfile people "$PEOPLE" "$NAMES"'
   (map(select(.kind == "reviewed")) | sort_by(-.reviewer_comments)[]
     | [.pr, .title, (.author | name), (.reviewers | map(name) | join(", ")), .rounds,
        .reviewer_comments, .author_replies, .author_commits, .state] | @tsv)
+' "$TMP/all.jsonl" | column -t -s $'\t'
+echo
+
+# Stages follow LinearB: coding = first commit to PR opened, pickup = opened to first
+# review or comment from someone else, review = that to merge. Their 2026 report
+# grades at p75, so most columns are p75.
+echo "Cycle time, PRs merged in the range (LinearB 2026 elite at p75: cycle <25h, coding <54m, pickup <1h, review <3h)"
+jq -sr --rawfile people "$PEOPLE" "$NAMES"'
+  def hours(a; b): if a == null or b == null then null else ([((b | fromdate) - (a | fromdate)) / 3600, 0] | max) end;
+  def pct(p): map(select(. != null)) | sort | if length == 0 then null else .[(length - 1) * p | floor] end;
+  def fmt: if . == null then "-" elif . < 1 then "\(. * 60 | round)m" elif . < 48 then "\(. * 10 | round / 10)h" else "\(. / 24 * 10 | round / 10)d" end;
+  def row(person): [person, length, (map(select(.first_review)) | length),
+    (map(hours(.first_commit; .merged)) | pct(0.5) | fmt),
+    (map(hours(.first_commit; .merged)) | pct(0.75) | fmt),
+    (map(hours(.first_commit; .opened)) | pct(0.75) | fmt),
+    (map(hours(.opened; .first_review)) | pct(0.75) | fmt),
+    (map(hours(.first_review; .merged)) | pct(0.75) | fmt)] | @tsv;
+  map(select(.kind == "cycle") | .who |= name)
+  | (["person", "merged", "reviewed", "cycle median", "cycle p75", "coding p75", "pickup p75", "review p75"] | @tsv),
+    (group_by(.who)[] | row(.[0].who)),
+    (select(length > 0) | row("everyone"))
 ' "$TMP/all.jsonl" | column -t -s $'\t'
